@@ -1,7 +1,5 @@
 require 'rubygems'
-# require 'open-uri'
 require 'nokogiri'
-# require 'pp'
 
 # The library for this code
 require 'dependencyformat'
