@@ -21,10 +21,10 @@ class TestGAVNodeSet < Test::Unit::TestCase
   def testCompare
     gn1 = DependencyFormat::GAVNode.new(@@basic_string)
     gn2 = DependencyFormat::GAVNode.new(@@longer_string)
-
+  
     themin = [gn1,gn2].min
     themax = [gn1,gn2].max
-
+  
     assert_equal(themin.element_count,gn1.element_count)
     assert_equal(themax.element_count,gn2.element_count)
   end
@@ -33,10 +33,11 @@ class TestGAVNodeSet < Test::Unit::TestCase
     gavlines = DependencyFormat::GAVNodeSet.new;
 
     @@ns.each do |dep|
-      gavlines << (GAVNode.new(dep))
+      gavlines << (DependencyFormat::GAVNode.new(dep))
     end
     
-    pp gavlines
+    gavlines.prepare_nodeset
+    puts gavlines
     
   end
   
