@@ -1,136 +1,225 @@
-#!/Users/sgharms/.rvm/rubies/ree-1.8.7-2010.02/bin/ruby
+#!/usr/bin/env ruby
 
-require 'rubygems'
-require 'open-uri'
+module DependencyFormat
+
+=begin rdoc
+
+=NAME spacer.rb
+
+=DESCRIPTION
+
+This is a script that takes the <dependencies></dependencies> stanza in a
+Maven pom.xml and re formats the selection (provided it's written with
+well-structured XML in the first place). The purpose here is not XML
+validation, rather this serves as a baseline for a Textmate scriptlet.
+
+The process takes the XML dependencies XPath, gets the <dependency> elements
+and then matches each element line into a GAVNode (groupId, artifactId,
+version) node. Like most *ML parsers, these entities are then aggregated into
+a NodeSet object which is used for aggregation functions.
+
+=Requirements
+
+   * Nokogiri
+
+=Author
+
+Steven G. Harms
+
+=Date
+
+9 August 2010
+
+=end
+
 require 'nokogiri'
-require 'pp'
+require 'open-uri'
 
-class GAVNode
-  # How wide is a tab?
-  TAB_WIDTH=4
+  class GAVNode
+    include Enumerable
   
-  # an iVar for each GAV component
-  attr_accessor :groupid, :artifactid, :version, :max,
-                :groupid_length, :artifactid_length, :version_length
-  
-  def initialize(g,a,v)
+=begin rdoc
+=DESCRIPTION
 
-    @groupid = g.first.to_s
-    @artifactid = a.first.to_s
-    @version = v.first.to_s
+The atomic node, initialized by passing in a G,A,V, likely derived from
+an XML parsing function that has handled a branch of XML and returned
+the <dependencies> branch.
+
+=end
+
+    # How wide is a tab?  In the context of the code I use spaces-as-tab, but
+    # it's foreseeable someone could want to branch this and make use of Tabs
+    # (evil!)
+
+    TAB_WIDTH=4
+
+    # an iVar for each GAV component
+    attr_accessor :groupid, :artifactid, :version, :max,
+                  :groupid_length, :artifactid_length, :version_length,
+                  :element_count, :fields
+
+    def initialize(ns)
+      # An array of children is passed in, typically a
+      # a Nokogiri::XML::NodeSet, or a string (typically for testing)
+      raise_message = 'GAVNode::initialize() takes either a Nokogiri::XML::Element or a String'
+      s = class << self; self end 
     
-    [@groupid, @artifactid, @version].each_with_index do |x,i| 
-      # De-whitespace the iVars      
-      x.gsub!(/[\s\t]+/,'')
+      # Basic runtime checks
+      raise raise_message if ns.nil?
+      unless ( ns.class.to_s =~ /(String|Nokogiri::XML::Element)$/)
+        raise RuntimeError, raise_message
+      end
+      if (ns.class.to_s == 'String' && ns !~ /[<>]/)
+        raise "You passed a string without any angle brackets, probably not XML"
+      end
+
+      # Past basic argument checks
+      if ns.class.to_s =~ /Element$/
+        ns = ns.to_s.gsub(/\s+/,'').chomp
+      end
+    
+      # Build this into a nokogiri object
+      if ns.class.to_s == 'String'
+        # Handle comments
+        if ns =~ /^<!--/
+          @is_comment = true
+          @comment = ns
+          s.send(:define_method, 'is_comment') do
+            return true
+          end
+          return
+        end
+        ns = Nokogiri::XML(ns).search("dependency").children
+      end
+    
+
+
+      # We assume we now have an XML-ish branch on which to operate
+      @element_count = ns.length
+      @fields = []
+  
+      ns.entries.each do |e|
+        # Set each name to an iVar
+        name = e.name.to_s.strip
+        content = e.content.strip
       
-      # Remove the tags.  Surely there's a better way to do this than by
-      # gsub(), though.
-      x.gsub!(/<[\/\w]+>/,'')      
+        @fields << name
+      
+        instance_variable_set("@#{e.name}", content)
+        instance_variable_set("@#{e.name}_length", content.length)
+
+        # Get Jiggy with some metaprogramming
+        s.send(:define_method,name) do
+          return self.instance_variable_get("@"+name)
+        end
+
+      end
+
+      s.send(:define_method, :max) do
+        return [@groupid_length, @artifactid_length, @version_length].max
+      end
+
+      def <=>(obj)
+        @element_count <=> obj.element_count
+      end
     end
 
-    @groupid_length     = @groupid.length
-    @artifactid_length  = @artifactid.length
-    @version_length     = @version.length    
+    def to_s
+      return @is_comment ? @comment :
+        sprintf("%s has [G:%s][A:%s][V:%s]\n", "#{self.class}[#{self.object_id}]", groupId, artifactId, version);
+    end
+  end
+
+  class GAVNodeSet
+    include Enumerable
+
+    #TODO break out , :groupid_max, :artifactid_max, :version_max, :pom_lines into fields from the longest node search
+    # then get the longest length for each field, must be more meta
+  
+    attr_accessor :nodes, :pom_dependency_lines
+
+    def initialize
+      @nodes = []
+      @longest_val_table = {}
+      @pom_dependency_lines = []
+      @DEBUG = false
+    end
+  
+
+    def push(obj)
+      @nodes.push(obj)
+    end
+
+    def <<(obj)
+      @nodes.push(obj)
+    end
+
+    def each(&block)
+      @nodes.each(&block)
+    end
+
+    def max_fields_object
+      @max_fields = @nodes.max
+    end
+  
+    def max_fields_count
+      return @nodes.max.element_count
+    end
+
+    def get_longest_values
+      @wanted_fields.each do |f|
+        # Because our methods are dynamically built, it's possible to call (say)
+        # 'scope()' on an instance that doesn't have a scope line. We'll trap that
+        # exception here.
+        begin
+          @longest_val_table[f.to_sym] = 
+            @nodes.map{|n| n.send(f.to_sym).length}.max        
+        rescue NoMethodError => e
+          STDERR.puts("#{self.class} squelched error " + e) if @DEBUG
+        end
+      
+      end
+    end
+  
+    def prepare_nodeset
+      @wanted_fields = max_fields_object.fields
+      get_longest_values
     
-    @max = [@groupid_length, @artifactid_length, @version_length].max
-  end
-
-  def to_s
-    return sprintf("%s has [%s]\n\t[%s]\n\t[%s]\n\n", "#{self.class}[#{self.object_id}]", @groupid, @artifactid, @version);
-  end
-end
-
-class GAVNodeSet
-  include Enumerable
+      @nodes.each do |n|
+        the_line=""
+        @wanted_fields.each do |f|
+          begin
+            longest_length = @longest_val_table[f.to_sym].to_i
+            current_length = n.send(f.to_sym).length      
+            spacer =  longest_length - current_length
+            the_line += sprintf("<%s>%s%s</%s>", f, n.send(f.to_sym), " " * spacer,f)                    
+          rescue NoMethodError, ArgumentError => e
+            STDERR.puts("#{self.class} squelched error " + e) if @DEBUG
+          end
+        end
+      the_line = "  <dependency>#{the_line}</dependency>\n"
+      @pom_dependency_lines << the_line
+      end
+    end
   
-  attr_accessor :nodes, :groupid_max, :artifactid_max, :version_max, :pom_lines
-  
-  def initialize
-    @nodes = @pom_lines = []
-    @groupid_max    = 0
-    @artifactid_max = 0
-    @version_max    = 0
-
-  end
-  
-  def push(obj)
-    @nodes.push(obj)
-  end
-  
-  def <<(obj)
-    @nodes.push(obj)
-  end
-  
-  def each(&block)
-    @nodes.each(&block)
-  end
-  
-  def calculate_maxima
-    @groupid_max    = (@nodes.map{|n|n.groupid_length}).max
-    @artifactid_max = (@nodes.map{|n|n.artifactid_length}).max
-    @version_max    = (@nodes.map{|n|n.version_length}).max    
-  end
-  
-  def return_maxima
-    [@groupid_max, @artifactid_max, @version_max]
-  end
-  
-  def generate_pom_lines
-    pom_lines = Array.new
-
-    # Just say no to drugs, kids.  Don't do lines.
-    @nodes.each do |line|
-      begin
-        theline = ""
-
-        theline += "<dependency>"
-        filler = self.groupid_max - line.groupid_length
-
-
-        theline += sprintf("%s%s%s%s", "<groupId>", line.groupid, " " * filler, "</groupId>" )
-
-
-        filler = @artifactid_max - line.artifactid_length
-        theline += sprintf("%s%s%s%s", "<artifactId>", line.artifactid, " " * filler, "</artifactId>" )
-        filler = version_max - line.version_length
-
-        theline += sprintf("%s%s%s%s", "<version>", line.version, " " * filler, "</version>" )
-        theline += "</dependency>\n"
-        pom_lines.push("  " + theline)
-      rescue Exception => e
-        STDERR.puts("An error occurred: #{e}")
-      end      
+    def dependencies_stanza
+      return sprintf("%s%s%s", "<dependencies>\n",@pom_dependency_lines.to_s,"</dependencies>")
     end
 
-    # Return the entries uniquely and sorted.
-    @pom_lines = pom_lines.sort.uniq
-  end
+    def to_s
+      return dependencies_stanza
+    end
   
-  def prepare_nodeset
-    self.calculate_maxima
-    self.generate_pom_lines
-  end
-  
-  def to_s
-    return sprintf("%s\n%s%s\n", "<dependencies>", @pom_lines.to_s, "</dependencies>")
   end
 end
 
 doc = Nokogiri::XML(ENV['TM_SELECTED_TEXT'])
 
-# Get an array of <dependency> lines
-deps_array = doc.search("dependency")
-
-
 # Load each of them into an array of GAVLine objects
+ns = doc.search("dependency")
 
-gavlines = GAVNodeSet.new;
-
-deps_array.each do |dep|
-  # puts dep.search("groupId");
-  gavlines << (GAVNode.new(dep.search("groupId"), 
-                           dep.search("artifactId"),
-                           dep.search("version")))
+ns.each do |dep|
+  gavlines << (DependencyFormat::GAVNode.new(dep))
 end
 
 gavlines.prepare_nodeset
