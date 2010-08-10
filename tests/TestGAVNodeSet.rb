@@ -37,8 +37,8 @@ class TestGAVNodeSet < Test::Unit::TestCase
     end
     
     gavlines.prepare_nodeset
+    # pp gavlines.pom_dependency_lines
     puts gavlines
-    
   end
   
 end

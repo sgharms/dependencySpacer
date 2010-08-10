@@ -13,3 +13,8 @@ desc "Run the basic script with fixtures/test.xml"
 task :basic do
   ruby 'spacer.rb tests/fixtures/test.xml'
 end
+
+desc "The command to run the full test suite."
+task :tests => [:testgav, :testset] do
+  puts "Tests complete!"
+end

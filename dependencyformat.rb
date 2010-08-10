@@ -74,7 +74,7 @@ the <dependencies> branch.
 
     # Past basic argument checks
     if ns.class.to_s =~ /Element$/
-      ns = ns.to_s.gsub(/\s+/,'')
+      ns = ns.to_s.gsub(/\s+/,'').chomp
     end
     
     # Build this into a nokogiri object
@@ -175,20 +175,19 @@ class GAVNodeSet
     @wanted_fields = max_fields_object.fields
     get_longest_values
     
-    the_line = "  "
     @nodes.each do |n|
+      the_line=""
       @wanted_fields.each do |f|
        spacer = @longest_val_table[f.to_sym].to_i - n.send(f.to_sym).length      
       the_line += sprintf("<%s>%s%s</%s>", f, n.send(f.to_sym), " " * spacer,f)
       end
-    the_line += "\n"
-    the_line = "<dependency>#{the_line}</dependency>"
+    the_line = "  <dependency>#{the_line}</dependency>\n"
     @pom_dependency_lines << the_line
     end
   end
   
   def dependencies_stanza
-    return sprintf("%s,%s,%s", "<dependencies>\n",@pom_dependency_lines.to_s,"</dependencies>")
+    return sprintf("%s%s%s", "<dependencies>\n",@pom_dependency_lines.to_s,"</dependencies>")
   end
 
   def to_s
