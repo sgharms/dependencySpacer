@@ -84,10 +84,10 @@ the <dependencies> branch.
           return true
         end
         return
-      else
-        ns = Nokogiri::XML(ns).search("dependency").children
       end
+      ns = Nokogiri::XML(ns).search("dependency").children
     end
+
 
     # We assume we now have an XML-ish branch on which to operate
     @element_count = ns.length
