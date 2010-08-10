@@ -35,6 +35,7 @@ require 'nokogiri'
 require 'open-uri'
 
 class GAVNode
+  include Enumerable
   
 =begin rdoc
 =DESCRIPTION
@@ -110,7 +111,10 @@ the <dependencies> branch.
     s.send(:define_method, :max) do
       return [@groupid_length, @artifactid_length, @version_length].max
     end
-    
+
+    def <=>(obj)
+      @element_count <=> obj.element_count
+    end
   end
 
   def to_s
@@ -122,14 +126,13 @@ end
 class GAVNodeSet
   include Enumerable
 
-  attr_accessor :nodes, :groupid_max, :artifactid_max, :version_max, :pom_lines
+  #TODO break out , :groupid_max, :artifactid_max, :version_max, :pom_lines into fields from the longest node search
+  # then get the longest length for each field, must be more meta
+  
+  attr_accessor :nodes
 
   def initialize
-    @nodes = @pom_lines = []
-    @groupid_max    = 0
-    @artifactid_max = 0
-    @version_max    = 0
-
+    @nodes = []
   end
 
   def push(obj)
@@ -145,53 +148,22 @@ class GAVNodeSet
   end
 
   def calculate_maxima
-    @groupid_max    = (@nodes.map{|n|n.groupid_length}).max
-    @artifactid_max = (@nodes.map{|n|n.artifactid_length}).max
-    @version_max    = (@nodes.map{|n|n.version_length}).max    
+    @max_fields = @nodes.max.element_count
   end
 
   def return_maxima
-    [@groupid_max, @artifactid_max, @version_max]
+
   end
 
   def generate_pom_lines
-    pom_lines = Array.new
-
-    # Just say no to drugs, kids.  Don't do lines.
-    @nodes.each do |line|
-      begin
-        theline = ""
-
-        theline += "<dependency>"
-        filler = self.groupid_max - line.groupid_length
-
-
-        theline += sprintf("%s%s%s%s", "<groupId>", line.groupid, " " * filler, "</groupId>" )
-
-
-        filler = @artifactid_max - line.artifactid_length
-        theline += sprintf("%s%s%s%s", "<artifactId>", line.artifactid, " " * filler, "</artifactId>" )
-        filler = version_max - line.version_length
-
-        theline += sprintf("%s%s%s%s", "<version>", line.version, " " * filler, "</version>" )
-        theline += "</dependency>\n"
-        pom_lines.push("  " + theline)
-      rescue Exception => e
-        STDERR.puts("An error occurred: #{e}")
-      end      
-    end
-
-    # Return the entries uniquely and sorted.
-    @pom_lines = pom_lines.sort.uniq
   end
 
   def prepare_nodeset
     self.calculate_maxima
-    self.generate_pom_lines
   end
 
   def to_s
-    return sprintf("%s\n%s%s\n", "<dependencies>", @pom_lines.to_s, "</dependencies>")
   end
+  
 end
 end
