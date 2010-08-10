@@ -1,7 +1,11 @@
-desc "Run unit tests in tests/ directory"
-task :test do
-  puts "Running unit tests..."
-  ruby 'tests/testNode.rb'
+desc "Run TestGAVNode unit tests in tests/ directory"
+task :testgav do
+  ruby 'tests/TestGAVNode.rb'
+end
+
+desc "Run TestGAVNodeSet unit tests in tests/ directory"
+task :testset do
+  ruby 'tests/TestGAVNodeSet.rb'
 end
 
 

@@ -60,46 +60,62 @@ the <dependencies> branch.
     # An array of children is passed in, typically a
     # a Nokogiri::XML::NodeSet, or a string (typically for testing)
     raise_message = 'GAVNode::initialize() takes either a Nokogiri::XML::Nodeset or a String'
+    s = class << self; self end 
+    
+    # Basic runtime checks
     raise raise_message if ns.nil?
-
     unless ( ns.class.to_s =~ /(String|Nokogiri::XML::Nodeset)$/)
       raise RuntimeError, raise_message
     end
-    
     if (ns.class.to_s == 'String' && ns !~ /[<>]/)
       raise "You passed a string without any angle brackets, probably not XML"
     end
 
+    # Past basic argument checks
+    
     # Build this into a nokogiri object
     if ns.class.to_s == 'String'
-      ns =  Nokogiri::XML(ns).search("dependency").children
+      # Handle comments
+      if ns =~ /^<!--/
+        @is_comment = true
+        @comment = ns
+        s.send(:define_method, 'is_comment') do
+          return true
+        end
+        return
+      else
+        ns = Nokogiri::XML(ns).search("dependency").children
+      end
     end
 
+    # We assume we now have an XML-ish branch on which to operate
     @element_count = ns.length
     
-        # 
-        # @groupid = g.first.to_s
-        # @artifactid = a.first.to_s
-        # @version = v.first.to_s
-        # 
-        # [@groupid, @artifactid, @version].each_with_index do |x,i| 
-        #   # De-whitespace the iVars      
-        #   x.gsub!(/[\s\t]+/,'')
-        # 
-        #   # Remove the tags.  Surely there's a better way to do this than by
-        #   # gsub(), though.
-        #   x.gsub!(/<[\/\w]+>/,'')      
-        # end
-        # 
-        # @groupid_length     = @groupid.length
-        # @artifactid_length  = @artifactid.length
-        # @version_length     = @version.length    
-        # 
-        # @max = [@groupid_length, @artifactid_length, @version_length].max
+    attr_accessor_array = []
+    ns.entries.each do |e|
+      # Set each name to an iVar
+      name = e.content.to_s.strip
+      content = e.content.strip
+      
+      instance_variable_set("@#{e.name}", content)
+      instance_variable_set("@#{e.name}_length", content.length)
+
+      # Get Jiggy with some metaprogramming
+      s.send(:define_method,e.name) do
+        return self.instance_variable_get("@"+e.name)
+      end
+
+    end
+
+    s.send(:define_method, :max) do
+      return [@groupid_length, @artifactid_length, @version_length].max
+    end
+    
   end
 
   def to_s
-    return sprintf("%s has [%s]\n\t[%s]\n\t[%s]\n\n", "#{self.class}[#{self.object_id}]", @groupid, @artifactid, @version);
+    return self.is_comment ? @comment :
+      sprintf("%s has [%s][%s][%s]\n", "#{self.class}[#{self.object_id}]", groupId, artifactId, version);
   end
 end
 

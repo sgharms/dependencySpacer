@@ -28,12 +28,32 @@ class TestGAVNode < Test::Unit::TestCase
     end    
   end
   
-  def testSimpleString
+  def testGAVNodeElementAwareness
     gn = DependencyFormat::GAVNode.new(@@basic_string)
     assert_equal(3,gn.element_count,"Expected number of fields for @@basic_string is 3")
     assert_equal(4,
       DependencyFormat::GAVNode.new(@@longer_string).element_count,
       "Expected number of fields for @@basic_string is 3")
-    
+  end
+  
+  def testBaselineString
+    gn = DependencyFormat::GAVNode.new(@@basic_string)
+    assert_equal('axis', gn.groupId)
+    assert_equal('1.4',  gn.version)
+    assert_equal('axis', gn.artifactId)
+  end
+
+  def testLongString
+    gn = DependencyFormat::GAVNode.new(@@longer_string)
+    assert_equal('axis', gn.groupId)
+    assert_equal('1.4',  gn.version)
+    assert_equal('axis', gn.artifactId)
+    assert_equal('test', gn.scope)
+  end
+  
+  def testAComment
+    gn = DependencyFormat::GAVNode.new("<!-- This is an XML comment -->")
+    assert(gn.is_comment)
+    assert_equal('<!-- This is an XML comment -->',gn.to_s)
   end
 end
