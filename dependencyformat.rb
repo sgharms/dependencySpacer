@@ -198,6 +198,7 @@ the <dependencies> branch.
       the_line = "  <dependency>#{the_line}</dependency>\n"
       @pom_dependency_lines << the_line
       end
+      @pom_dependency_lines.sort!.uniq!
     end
   
     def dependencies_stanza
